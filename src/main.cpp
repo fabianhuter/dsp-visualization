@@ -4,6 +4,8 @@
 #include <iostream>
 #include <math.h>
 #include <cmath>
+#include <string>
+#include <sstream>
 using namespace std;
 using namespace restbed;
 
@@ -22,36 +24,63 @@ void cors_options_handler(const shared_ptr<Session> session)
 
 
 vector<double> generateSineWave(int sampleRate, int duration, double amplitude, double frequency) {
-    vector<double> sine_wave; // number of total samples
+    vector<double> sine_wave;
     int numOfSamples = sampleRate * duration;
     double radiantVelocity = 2 * M_PI * frequency;
-    for(int i = 0; i < sampleRate * duration; i++) {
+    for(int i = 0; i < numOfSamples; i++) {
         double sineValue = amplitude * sin(radiantVelocity * ((double) i / sampleRate));
         sine_wave.push_back(sineValue);
     }
     return sine_wave;
 }
 
-void make_sound(const shared_ptr<Session> session)
-{
-    const auto request = session->get_request();
 
-    vector<double> sine_wave = generateSineWave(400, 1, 1, 50);
+void functionToJSON(vector<double> function) {
     string data = "[";
-    for(int i = 0; i < (int)sine_wave.size(); i++) {
-
-        data += R"({"index": )" + std::to_string(i) + R"(, "value": )" + std::to_string(sine_wave[i]) + "}";
-        if(i < sine_wave.size() -1) {
+    for(int i = 0; i < (int)function.size(); i++) {
+        data += R"({"index": )" + std::to_string(i) + R"(, "value": )" + std::to_string(function[i]) + "}";
+        if(i < function.size() -1) {
             data += ", ";
         }
     }
     data += "]";
+}
 
+void onSineWave(const shared_ptr<Session> session)
+{
+    const auto request = session->get_request();
+    
+    // Get query parameters
+    int sampleRate = 400;
+    int duration = 1;
+    double amplitude = 1.0;
+    double frequency = 50.0;
 
+    // Parse query parameters
+    const auto query_params = request->get_query_parameters();
+    
+    auto it = query_params.find("sampleRate");
+    if (it != query_params.end()) {
+        sampleRate = stoi(it->second);
+    }
+    it = query_params.find("duration");
+    if (it != query_params.end()) {
+        duration = stoi(it->second);
+    }
+    it = query_params.find("amplitude");
+    if (it != query_params.end()) {
+        amplitude = stod(it->second);
+    }
+    it = query_params.find("frequency");
+    if (it != query_params.end()) {
+        frequency = stod(it->second);
+    }
 
-
-    int numOfChars = data.length();
-
+    vector<double> sine_wave = generateSineWave(sampleRate, duration, amplitude, frequency);
+    
+    // Convert sine_wave to JSON 
+    
+    string data = functionToJSON(sine_wave);
 
     session->close(OK, data, {
         { "Access-Control-Allow-Origin", "*" },
@@ -70,9 +99,9 @@ void make_sound(const shared_ptr<Session> session)
 int main(const int, const char**)
 {
     auto resource = make_shared<Resource>();
-    resource->set_path("/hello");
+    resource->set_path("/sine_wave");
     resource->set_method_handler("OPTIONS", cors_options_handler);
-    resource->set_method_handler("GET", make_sound);
+    resource->set_method_handler("GET", onSineWave);
 
     auto settings = make_shared<Settings>();
     settings->set_port(8080);
